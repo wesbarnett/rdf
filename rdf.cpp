@@ -1,30 +1,30 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <cstring>
 #include "Trajectory.h"
 #include "Utils.h"
 
 int main(int argc, char *argv[]) {
 
     const double start = 0.0;
-    double *g;
     double r2;
+    double binvol;
+    double boxvol;
+    double r;
     int frame;
     int i;
     int ig;
     int j;
-    int nFrames;
-    int nGrp1;
-    int nGrp2;
     int nOW;
-    int total;
     matrix box;
     ofstream oFS;
     rvec atomi;
     rvec atomj;
     rvec dx;
 
-    if (!argc == 8) {
+    if (argc != 9) {
         cout << "Usage: " << endl;
         cout << "  " << argv[0] << " xtcfile ndxfile outfile group1 group2 excldist binwidth endofrdf" << endl;
         return -1;
@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
     const double rexcl2 = rexcl * rexcl;
     const double binwidth = atof(argv[7]);
     const double end = atof(argv[8]);
+    const double end2 = end * end;
 
     cout << "Trajectory file:      " << xtcfile << endl;
     cout << "Index file:           " << ndxfile << endl;
@@ -47,21 +48,24 @@ int main(int argc, char *argv[]) {
     cout << "Group 2:              " << grp2 << endl;
     cout << "Exclusion distance:   " << rexcl << endl;
     cout << "Bin width:            " << binwidth << endl;
-    cout << "Location of last bin: " << end << endl << endl;
+    cout << "Location of last bin: " << end << endl;
 
     const int nBins = (end-start)/binwidth + 1;
-    g = new double[nBins];
+    double g[nBins];
 
     Trajectory traj(xtcfile, ndxfile);
 
-    nFrames = traj.GetNFrames();
-    nGrp1 = traj.GetNAtoms(grp1);
-    nGrp2 = traj.GetNAtoms(grp2);
-    total = 0;
+    const int nFrames = traj.GetNFrames();
+    const int nGrp1 = traj.GetNAtoms(grp1);
+    const int nGrp2 = traj.GetNAtoms(grp2);
 
+    // Constant volume
+    traj.GetBox(0,box);
+
+    #pragma omp parallel for private(frame,i,j,atomi,atomj,dx,r2,ig)
     for (frame = 0; frame < nFrames; frame++) {
 
-        traj.GetBox(frame,box);
+        if (frame % 100 == 0 ) cout << "Calculating frame: " << frame << endl;;
 
         for (i = 0; i < nGrp1; i++) {
 
@@ -75,16 +79,24 @@ int main(int argc, char *argv[]) {
                 dx[Z] = atomi[Z] - atomj[Z];
                 pbc(dx,box);
                 r2 = dot(dx,dx);
-                if (r2 > rexcl2) {
-                    ig = sqrt(r2/binwidth);
+                if (r2 > rexcl2 && r2 < end2) {
+                    ig = ceil(sqrt(r2)/binwidth);
                     g[ig] += 1.0;
-                    total++;
                 }
 
             }
 
         }
 
+    }
+
+    boxvol = volume(box);
+
+    for (i = 0; i < nBins; i++) {
+        r = (double) i + 0.5;
+        binvol = pow(r,3) - pow((r-1.0),3);
+        binvol *= 4.0/3.0 * M_PI * pow(binwidth,3);
+        g[i] *= boxvol / (nGrp1 * nGrp2 * binvol * nFrames);
     }
 
     oFS.open(outfile.c_str());
@@ -96,8 +108,9 @@ int main(int argc, char *argv[]) {
     oFS << "# Exclusion distance:   " << rexcl << endl;
     oFS << "# Bin width:            " << binwidth << endl;
     oFS << "# Location of last bin: " << end << endl << endl;
+    oFS << fixed << setprecision(6);
     for (i = 0; i < nBins; i++) {
-        oFS << ((double) i) * binwidth + start << "  " << g[i]/total << endl;
+        oFS << ((double) i) * binwidth + start << "  " << g[i] << endl;
     }
     oFS.close();
 

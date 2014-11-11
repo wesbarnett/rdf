@@ -8,6 +8,7 @@
 
 int main(int argc, char *argv[]) {
 
+    const double f = 4.0/3.0 * M_PI;
     const double start = 0.0;
     double r2;
     double binvol;
@@ -51,7 +52,7 @@ int main(int argc, char *argv[]) {
     cout << "Location of last bin: " << end << endl;
 
     const int nBins = (end-start)/binwidth + 1;
-    double g[nBins];
+    vector <double> g(nBins,0.0);
 
     Trajectory traj(xtcfile, ndxfile);
 
@@ -59,29 +60,69 @@ int main(int argc, char *argv[]) {
     const int nGrp1 = traj.GetNAtoms(grp1);
     const int nGrp2 = traj.GetNAtoms(grp2);
 
-    // Constant volume
-    traj.GetBox(0,box);
+    if (grp1 == grp2) {
 
-    #pragma omp parallel for private(frame,i,j,atomi,atomj,dx,r2,ig)
-    for (frame = 0; frame < nFrames; frame++) {
+        #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
+        for (frame = 0; frame < nFrames; frame++) {
 
-        if (frame % 100 == 0 ) cout << "Calculating frame: " << frame << endl;;
+            traj.GetBox(frame,box);
+            boxvol = volume(box);
 
-        for (i = 0; i < nGrp1; i++) {
+            //if (frame % 10 == 0 ) cout << "Calculating frame: " << frame << endl;;
+            cout << "Calculating frame: " << frame << endl;;
 
-            traj.GetXYZ(frame,grp1,i,atomi);
+            for (i = 0; i < nGrp1-1; i++) {
 
-            for (j = 0; j < nGrp2; j++) {
+                traj.GetXYZ(frame,grp1,i,atomi);
 
-                traj.GetXYZ(frame,grp1,j,atomj);
-                dx[X] = atomi[X] - atomj[X];
-                dx[Y] = atomi[Y] - atomj[Y];
-                dx[Z] = atomi[Z] - atomj[Z];
-                pbc(dx,box);
-                r2 = dot(dx,dx);
-                if (r2 > rexcl2 && r2 < end2) {
-                    ig = ceil(sqrt(r2)/binwidth);
-                    g[ig] += 1.0;
+                for (j = i+1; j < nGrp2; j++) {
+
+                    traj.GetXYZ(frame,grp1,j,atomj);
+                    dx[X] = atomi[X] - atomj[X];
+                    dx[Y] = atomi[Y] - atomj[Y];
+                    dx[Z] = atomi[Z] - atomj[Z];
+                    pbc(dx,box);
+                    r2 = dot(dx,dx);
+                    if (r2 > rexcl2 && r2 < end2) {
+                        ig = ceil(sqrt(r2)/binwidth);
+                        g.at(ig) += boxvol;
+                    }
+
+                }
+
+            }
+
+        }
+
+
+    } else {
+
+        #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
+        for (frame = 0; frame < nFrames; frame++) {
+
+            traj.GetBox(frame,box);
+            boxvol = volume(box);
+
+            //if (frame % 10 == 0 ) cout << "Calculating frame: " << frame << endl;;
+            cout << "Calculating frame: " << frame << endl;;
+
+            for (i = 0; i < nGrp1; i++) {
+
+                traj.GetXYZ(frame,grp1,i,atomi);
+
+                for (j = 0; j < nGrp2; j++) {
+
+                    traj.GetXYZ(frame,grp1,j,atomj);
+                    dx[X] = atomi[X] - atomj[X];
+                    dx[Y] = atomi[Y] - atomj[Y];
+                    dx[Z] = atomi[Z] - atomj[Z];
+                    pbc(dx,box);
+                    r2 = dot(dx,dx);
+                    if (r2 > rexcl2 && r2 < end2) {
+                        ig = ceil(sqrt(r2)/binwidth);
+                        g.at(ig) += boxvol;
+                    }
+
                 }
 
             }
@@ -90,13 +131,11 @@ int main(int argc, char *argv[]) {
 
     }
 
-    boxvol = volume(box);
-
     for (i = 0; i < nBins; i++) {
-        r = (double) i + 0.5;
+        r = (double) i;
         binvol = pow(r,3) - pow((r-1.0),3);
-        binvol *= 4.0/3.0 * M_PI * pow(binwidth,3);
-        g[i] *= boxvol / (nGrp1 * nGrp2 * binvol * nFrames);
+        binvol *= f * pow(binwidth,3);
+        g.at(i) /= ((nGrp1-1) * nGrp2 * binvol * nFrames);
     }
 
     oFS.open(outfile.c_str());

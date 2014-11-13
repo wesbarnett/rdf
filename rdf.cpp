@@ -27,9 +27,6 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
         traj.GetBox(frame,box);
         boxvol = volume(box);
 
-        //if (frame % 10 == 0 ) cout << "Calculating frame: " << frame << endl;;
-        cout << "Calculating frame: " << frame << endl;;
-
         for (i = 0; i < nGrp-1; i++) {
 
             traj.GetXYZ(frame,grp,i,atomi);
@@ -78,9 +75,6 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 
         traj.GetBox(frame,box);
         boxvol = volume(box);
-
-        //if (frame % 10 == 0 ) cout << "Calculating frame: " << frame << endl;;
-        cout << "Calculating frame: " << frame << endl;;
 
         for (i = 0; i < nGrp1; i++) {
 
@@ -152,6 +146,7 @@ int main(int argc, char *argv[]) {
 
     configfile = argv[1];
 
+    cout << "Reading " << configfile << "." << endl;
     iFS.open(configfile.c_str());
     iFS >> xtcfile;
     iFS >> ndxfile;
@@ -159,8 +154,8 @@ int main(int argc, char *argv[]) {
     iFS >> grp1;
     iFS >> grp2;
     iFS >> rexcl;
-    rexcl2 = rexcl*rexcl;
     iFS >> binwidth;
+    iFS >> end;
     iFS.close();
 
     cout << "Trajectory file:      " << xtcfile << endl;
@@ -171,6 +166,7 @@ int main(int argc, char *argv[]) {
     cout << "Exclusion distance:   " << rexcl << endl;
     cout << "Bin width:            " << binwidth << endl;
     cout << "Location of last bin: " << end << endl;
+    rexcl2 = rexcl*rexcl;
     end2 = end * end;
 
     const int nBins = (end-start)/binwidth + 1;

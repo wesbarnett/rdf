@@ -6,11 +6,15 @@
 #include "Trajectory.h"
 #include "Utils.h"
 
+const double f = 4.0/3.0 * M_PI;
+
 void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) {
 
     const int nFrames = traj.GetNFrames();
     const int nGrp = traj.GetNAtoms(grp);
+    double binvol;
     double boxvol;
+    double r;
     double r2;
     int frame;
     int i;
@@ -24,6 +28,7 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
     #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
     for (frame = 0; frame < nFrames; frame++) {
 
+        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
         traj.GetBox(frame,box);
         boxvol = volume(box);
 
@@ -39,15 +44,19 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
                 dx[Z] = atomi[Z] - atomj[Z];
                 pbc(dx,box);
                 r2 = dot(dx,dx);
-                if (r2 > rexcl2 && r2 < end2) {
-                    ig = ceil(sqrt(r2)/binwidth);
-                    g.at(ig) += boxvol;
-                }
+                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvol;
 
             }
 
         }
 
+    }
+
+    for (i = 0; i < g.size(); i++) {
+        r = (double) i;
+        binvol = pow(r,3) - pow((r-1.0),3);
+        binvol *= f * pow(binwidth,3);
+        g.at(i) /= ((nGrp * nGrp)/2.0 * binvol * nFrames);
     }
 
     return;
@@ -59,7 +68,9 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
     const int nFrames = traj.GetNFrames();
     const int nGrp1 = traj.GetNAtoms(grp1);
     const int nGrp2 = traj.GetNAtoms(grp2);
+    double binvol;
     double boxvol;
+    double r;
     double r2;
     int frame;
     int i;
@@ -73,6 +84,7 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
     #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
     for (frame = 0; frame < nFrames; frame++) {
 
+        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
         traj.GetBox(frame,box);
         boxvol = volume(box);
 
@@ -82,43 +94,27 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 
             for (j = 0; j < nGrp2; j++) {
 
-                traj.GetXYZ(frame,grp1,j,atomj);
+                traj.GetXYZ(frame,grp2,j,atomj);
                 dx[X] = atomi[X] - atomj[X];
                 dx[Y] = atomi[Y] - atomj[Y];
                 dx[Z] = atomi[Z] - atomj[Z];
                 pbc(dx,box);
                 r2 = dot(dx,dx);
-                if (r2 > rexcl2 && r2 < end2) {
-                    ig = ceil(sqrt(r2)/binwidth);
-                    g.at(ig) += boxvol;
-                }
-
+                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvol;
             }
 
         }
 
     }
 
-    return;
-}
-
-void normalize(Trajectory &traj, string grp1, string grp2, int nBins, double binwidth, vector <double> &g) {
-
-    const double f = 4.0/3.0 * M_PI;
-    const int nFrames = traj.GetNFrames();
-    const int nGrp1 = traj.GetNAtoms(grp1);
-    const int nGrp2 = traj.GetNAtoms(grp2);
-    double binvol;
-    double r;
-    int i;
-
-    for (i = 0; i < nBins; i++) {
+    for (i = 0; i < g.size(); i++) {
         r = (double) i;
         binvol = pow(r,3) - pow((r-1.0),3);
         binvol *= f * pow(binwidth,3);
         g.at(i) /= ((nGrp1-1) * nGrp2 * binvol * nFrames);
     }
 
+    return;
 }
 
 int main(int argc, char *argv[]) {
@@ -146,7 +142,7 @@ int main(int argc, char *argv[]) {
 
     configfile = argv[1];
 
-    cout << "Reading " << configfile << "." << endl;
+    cout << "Reading " << configfile << "...";
     iFS.open(configfile.c_str());
     iFS >> xtcfile;
     iFS >> ndxfile;
@@ -157,6 +153,7 @@ int main(int argc, char *argv[]) {
     iFS >> binwidth;
     iFS >> end;
     iFS.close();
+    cout << "done." << endl;
 
     cout << "Trajectory file:      " << xtcfile << endl;
     cout << "Index file:           " << ndxfile << endl;
@@ -174,18 +171,13 @@ int main(int argc, char *argv[]) {
 
     Trajectory traj(xtcfile, ndxfile);
 
-    const int nFrames = traj.GetNFrames();
-    const int nGrp1 = traj.GetNAtoms(grp1);
-    const int nGrp2 = traj.GetNAtoms(grp2);
-
     if (grp1 == grp2) {
         doRdf(traj,grp1,rexcl2,end2,binwidth,g);
     } else {
         doRdf(traj,grp1,grp2,rexcl2,end2,binwidth,g);
     }
 
-    normalize(traj, grp1, grp2, nBins, binwidth, g);
-
+    cout << "Writing output to " << outfile << "...";
     oFS.open(outfile.c_str());
     oFS << "# Trajectory file:      " << xtcfile << endl;
     oFS << "# Index file:           " << ndxfile << endl;
@@ -200,6 +192,7 @@ int main(int argc, char *argv[]) {
         oFS << ((double) i) * binwidth + start << "  " << g[i] << endl;
     }
     oFS.close();
+    cout << "done." << endl;
 
     return 0;
 }

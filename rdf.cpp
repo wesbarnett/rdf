@@ -7,115 +7,9 @@
 #include "Utils.h"
 
 const double f = 4.0/3.0 * M_PI;
-
-void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) {
-
-    const int nFrames = traj.GetNFrames();
-    const int nGrp = traj.GetNAtoms(grp);
-    double binvol;
-    double boxvol;
-    double r;
-    double r2;
-    int frame;
-    int i;
-    int ig;
-    int j;
-    matrix box;
-    rvec atomi;
-    rvec atomj;
-    rvec dx;
-
-    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
-    for (frame = 0; frame < nFrames; frame++) {
-
-        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        traj.GetBox(frame,box);
-        boxvol = volume(box);
-
-        for (i = 0; i < nGrp-1; i++) {
-
-            traj.GetXYZ(frame,grp,i,atomi);
-
-            for (j = i+1; j < nGrp; j++) {
-
-                traj.GetXYZ(frame,grp,j,atomj);
-                dx[X] = atomi[X] - atomj[X];
-                dx[Y] = atomi[Y] - atomj[Y];
-                dx[Z] = atomi[Z] - atomj[Z];
-                pbc(dx,box);
-                r2 = dot(dx,dx);
-                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvol;
-
-            }
-
-        }
-
-    }
-
-    for (i = 0; i < g.size(); i++) {
-        r = (double) i;
-        binvol = pow(r,3) - pow((r-1.0),3);
-        binvol *= f * pow(binwidth,3);
-        g.at(i) /= ((nGrp * nGrp)/2.0 * binvol * nFrames);
-    }
-
-    return;
-
-}
-
-void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g) {
-
-    const int nFrames = traj.GetNFrames();
-    const int nGrp1 = traj.GetNAtoms(grp1);
-    const int nGrp2 = traj.GetNAtoms(grp2);
-    double binvol;
-    double boxvol;
-    double r;
-    double r2;
-    int frame;
-    int i;
-    int ig;
-    int j;
-    matrix box;
-    rvec atomi;
-    rvec atomj;
-    rvec dx;
-
-    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2,ig)
-    for (frame = 0; frame < nFrames; frame++) {
-
-        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        traj.GetBox(frame,box);
-        boxvol = volume(box);
-
-        for (i = 0; i < nGrp1; i++) {
-
-            traj.GetXYZ(frame,grp1,i,atomi);
-
-            for (j = 0; j < nGrp2; j++) {
-
-                traj.GetXYZ(frame,grp2,j,atomj);
-                dx[X] = atomi[X] - atomj[X];
-                dx[Y] = atomi[Y] - atomj[Y];
-                dx[Z] = atomi[Z] - atomj[Z];
-                pbc(dx,box);
-                r2 = dot(dx,dx);
-                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvol;
-            }
-
-        }
-
-    }
-
-    for (i = 0; i < g.size(); i++) {
-        r = (double) i;
-        binvol = pow(r,3) - pow((r-1.0),3);
-        binvol *= f * pow(binwidth,3);
-        g.at(i) /= ((nGrp1-1) * nGrp2 * binvol * nFrames);
-    }
-
-    return;
-}
+void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g);
+void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g);
+void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g);
 
 int main(int argc, char *argv[]) {
 
@@ -176,6 +70,7 @@ int main(int argc, char *argv[]) {
     } else {
         doRdf(traj,grp1,grp2,rexcl2,end2,binwidth,g);
     }
+    normalize(traj, grp1, grp2, binwidth, g);
 
     cout << "Writing output to " << outfile << "...";
     oFS.open(outfile.c_str());
@@ -196,3 +91,117 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
+void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) {
+
+    const int nFrames = traj.GetNFrames();
+    const int nGrp = traj.GetNAtoms(grp);
+    double boxvol;
+    double boxvolX2;
+    double r2;
+    int frame;
+    int i;
+    int j;
+    matrix box;
+    rvec atomi;
+    rvec atomj;
+    rvec dx;
+
+    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2)
+    for (frame = 0; frame < nFrames; frame++) {
+
+        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
+        traj.GetBox(frame,box);
+        boxvol = volume(box);
+        boxvolX2 = 2.0 * boxvol;
+
+        for (i = 0; i < nGrp-1; i++) {
+
+            traj.GetXYZ(frame,grp,i,atomi);
+
+            for (j = i+1; j < nGrp; j++) {
+
+                traj.GetXYZ(frame,grp,j,atomj);
+                dx[X] = atomi[X] - atomj[X];
+                dx[Y] = atomi[Y] - atomj[Y];
+                dx[Z] = atomi[Z] - atomj[Z];
+                pbc(dx,box);
+                r2 = dot(dx,dx);
+                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvolX2;
+
+            }
+
+        }
+
+    }
+
+    return;
+
+}
+
+void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g) {
+
+    const int nFrames = traj.GetNFrames();
+    const int nGrp1 = traj.GetNAtoms(grp1);
+    const int nGrp2 = traj.GetNAtoms(grp2);
+    double boxvol;
+    double r2;
+    int frame;
+    int i;
+    int j;
+    matrix box;
+    rvec atomi;
+    rvec atomj;
+    rvec dx;
+
+    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj,dx,r2)
+    for (frame = 0; frame < nFrames; frame++) {
+
+        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
+        traj.GetBox(frame,box);
+        boxvol = volume(box);
+
+        for (i = 0; i < nGrp1; i++) {
+
+            traj.GetXYZ(frame,grp1,i,atomi);
+
+            for (j = 0; j < nGrp2; j++) {
+
+                traj.GetXYZ(frame,grp2,j,atomj);
+                dx[X] = atomi[X] - atomj[X];
+                dx[Y] = atomi[Y] - atomj[Y];
+                dx[Z] = atomi[Z] - atomj[Z];
+                pbc(dx,box);
+                r2 = dot(dx,dx);
+                if (r2 > rexcl2 && r2 < end2) g.at(floor(sqrt(r2)/binwidth)) += boxvol;
+            }
+
+        }
+
+    }
+
+    return;
+}
+
+void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g) {
+
+    const int nFrames = traj.GetNFrames();
+    const int nGrp1 = traj.GetNAtoms(grp1);
+    const int nGrp2 = traj.GetNAtoms(grp2);
+    double binvol;
+    double normFactor;
+    double r;
+    unsigned int i;
+
+    normFactor = (nGrp1-1) * nGrp2 * nFrames;
+    for (i = 0; i < g.size(); i++) {
+        r = (double) i;
+        binvol = pow(r,3) - pow((r-1.0),3);
+        binvol *= f * pow(binwidth,3);
+        g.at(i) /= (binvol * normFactor);
+    }
+
+    return;
+
+}
+

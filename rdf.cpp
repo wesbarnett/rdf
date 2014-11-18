@@ -1,3 +1,12 @@
+/* 
+ * James W. Barnett
+ *
+ * Calculates the radial distribution function. Requires libgmxcpp, which is
+ * custom library written for reading in Gromacs files using OOP. Also needs a
+ * configuration file to read in. See below on what is needed in such a file.
+ *
+ */
+
 
 #include <cstdlib>
 #include <iostream>
@@ -92,6 +101,16 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+// Calculates the radial distribution function when the two groups are the same
+// (e.g, OW-OW). It cycles through all frames stored in the Trajectory object.
+// In each frame it cycles through each pair of atoms, using a trick to make
+// sure we don't double count. Because normalization is done the same way as
+// when the groups are different, we add 2 * the boxvol each time. We add the
+// box volume instead of just counting because the box volume may not be
+// constant. If the box could be assured to be constant we would just put the
+// box volume in the normalization function, but instead we put it here. We also
+// exclude atoms closer than rexcl; this is so we don't count atoms on the same
+// molecule.
 void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) {
 
     const int nFrames = traj.GetNFrames();
@@ -139,6 +158,8 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
 
 }
 
+// Calculates the radial distribution function for two groups that are
+// different. For more details see the function above.
 void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g) {
 
     const int nFrames = traj.GetNFrames();
@@ -183,6 +204,10 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
     return;
 }
 
+// Normalizes the radial distribution function. Each bin has an associated
+// volume, which we divide by. The volume is spherical (but not a sphere, since
+// it is missing the inner part). The normalization factor also includes the
+// number of atoms in each group as well as the number of frames.
 void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g) {
 
     const int nFrames = traj.GetNFrames();

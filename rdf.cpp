@@ -18,7 +18,7 @@
 const double f = 4.0/3.0 * M_PI;
 void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g);
 void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g);
-void doBinning(rvec atomi, rvec atomj, matrix box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g);
+void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g);
 void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g);
 
 int main(int argc, char *argv[]) {
@@ -73,7 +73,7 @@ int main(int argc, char *argv[]) {
     const int nBins = (end-start)/binwidth + 1;
     vector <double> g(nBins,0.0);
 
-    Trajectory traj(xtcfile, ndxfile);
+    Trajectory traj(xtcfile, ndxfile, 200);
 
     if (grp1 == grp2) {
         doRdf(traj,grp1,rexcl2,end2,binwidth,g);
@@ -121,24 +121,24 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
     int frame;
     int i;
     int j;
-    matrix box;
-    rvec atomi;
-    rvec atomj;
+    triclinicbox box;
+    coordinates atomi;
+    coordinates atomj;
 
     #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj)
     for (frame = 0; frame < nFrames; frame++) {
 
         if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        traj.GetBox(frame,box);
+        box = traj.GetBox(frame);
         boxvolX2 = 2.0 * volume(box);
 
         for (i = 0; i < nGrp-1; i++) {
 
-            traj.GetXYZ(frame,grp,i,atomi);
+            atomi = traj.GetXYZ(frame,grp,i);
 
             for (j = i+1; j < nGrp; j++) {
 
-                traj.GetXYZ(frame,grp,j,atomj);
+                atomj = traj.GetXYZ(frame,grp,j);
                 doBinning(atomi,atomj,box,boxvolX2,binwidth,rexcl2,end2,g);
 
             }
@@ -163,24 +163,24 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
     int frame;
     int i;
     int j;
-    matrix box;
-    rvec atomi;
-    rvec atomj;
+    triclinicbox box;
+    coordinates atomi;
+    coordinates atomj;
 
     #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj)
     for (frame = 0; frame < nFrames; frame++) {
 
         if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        traj.GetBox(frame,box);
+        box = traj.GetBox(frame);
         boxvol = volume(box);
 
         for (i = 0; i < nGrp1; i++) {
 
-            traj.GetXYZ(frame,grp1,i,atomi);
+            atomi = traj.GetXYZ(frame,grp1,i);
 
             for (j = 0; j < nGrp2; j++) {
 
-                traj.GetXYZ(frame,grp2,j,atomj);
+                atomj = traj.GetXYZ(frame,grp2,j);
                 doBinning(atomi,atomj,box,boxvol,binwidth,rexcl2,end2,g);
             }
 
@@ -195,17 +195,12 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 // Does the actual binning - gets the squared distance, finds out if it is
 // within the noexcluded range and then adds the box volume to the bin
 // specified.
-void doBinning(rvec atomi, rvec atomj, matrix box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g) {
+void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g) {
 
     double r2;
     int ig;
-    rvec dx;
 
-    dx[X] = atomi[X] - atomj[X];
-    dx[Y] = atomi[Y] - atomj[Y];
-    dx[Z] = atomi[Z] - atomj[Z];
-    pbc(dx,box);
-    r2 = dot(dx,dx);
+    r2 = distance2(atomi,atomj,box);
     if (r2 > rexcl2 && r2 < end2) {
         ig = floor(sqrt(r2)/binwidth);
         g.at(ig) += boxvol;

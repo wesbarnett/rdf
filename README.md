@@ -11,15 +11,17 @@ beginning so the calculation can be run in parallel.
 
 ##Compiling
 
-```bash
+````bash
 g++ rdf.cpp -lgmxcpp -fopenmp -o rdf
-```
+````
 
 ##Running
 
 To run, do the following:
 
+````bash
 ./rdf conf.in
+````
 
 An example configuration file is found in the repository. It should have the
 following, in this order:

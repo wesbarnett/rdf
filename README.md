@@ -1,3 +1,4 @@
+##About 
 
 This is a simple radial distribution function (RDF) calculation for use with GROMACS output.
 GROMACS already includes a utility for calculating an RDF, so this is probably
@@ -33,3 +34,10 @@ following, in this order:
 * Location of last bin
 
 Again, see the example in conf.in.
+
+##Example
+
+Just for fun, here is an example of a water-water (OW-OW) RDF for TIP4PEW using output
+from this program:
+
+![RDF of Water](img/rdf.png)

@@ -12,7 +12,9 @@ beginning so the calculation can be run in parallel.
 ##Compiling
 
 ````bash
-g++ rdf.cpp -lgmxcpp -fopenmp -o rdf
+git clone git@github.com:wesbarnett/rdf.git
+cd rdf
+make
 ````
 
 ##Running

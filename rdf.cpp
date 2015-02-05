@@ -12,8 +12,8 @@
 #include <iostream>
 #include <string>
 #include <cstring>
-#include "Trajectory.h"
-#include "Utils.h"
+#include "gmxcpp/Trajectory.h"
+#include "gmxcpp/Utils.h"
 
 const double f = 4.0/3.0 * M_PI;
 void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g);

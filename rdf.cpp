@@ -21,7 +21,8 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g);
 void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g);
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) 
+{
 
     const double start = 0.0;
     double binwidth;
@@ -38,7 +39,8 @@ int main(int argc, char *argv[]) {
     string outfile;
     string xtcfile;
 
-    if (argc != 2) {
+    if (argc != 2) 
+    {
         cout << "Usage: " << endl;
         cout << "  " << argv[0] << " configfile" << endl;
         return -1;
@@ -73,9 +75,10 @@ int main(int argc, char *argv[]) {
     const int nBins = (end-start)/binwidth + 1;
     vector <double> g(nBins,0.0);
 
-    Trajectory traj(xtcfile, ndxfile, 200);
+    Trajectory traj(xtcfile, ndxfile);
 
-    if (grp1 == grp2) {
+    if (grp1 == grp2) 
+    {
         doRdf(traj,grp1,rexcl2,end2,binwidth,g);
     } else {
         doRdf(traj,grp1,grp2,rexcl2,end2,binwidth,g);
@@ -93,7 +96,8 @@ int main(int argc, char *argv[]) {
     oFS << "# Bin width:            " << binwidth << endl;
     oFS << "# Location of last bin: " << end << endl << endl;
     oFS << fixed << setprecision(6);
-    for (int i = 0; i < nBins; i++) {
+    for (int i = 0; i < nBins; i++) 
+    {
         oFS << ((double) i) * binwidth + start << "  " << g[i] << endl;
     }
     oFS.close();
@@ -102,17 +106,20 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-// Calculates the radial distribution function when the two groups are the same
-// (e.g, OW-OW). It cycles through all frames stored in the Trajectory object.
-// In each frame it cycles through each pair of atoms, using a trick to make
-// sure we don't double count. Because normalization is done the same way as
-// when the groups are different, we add 2 * the boxvol each time. We add the
-// box volume instead of just counting because the box volume may not be
-// constant. If the box could be assured to be constant we would just put the
-// box volume in the normalization function, but instead we put it here. We also
-// exclude atoms closer than rexcl; this is so we don't count atoms on the same
-// molecule.
-void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) {
+/* 
+ * Calculates the radial distribution function when the two groups are the same
+ * (e.g, OW-OW). It cycles through all frames stored in the Trajectory object.
+ * In each frame it cycles through each pair of atoms, using a trick to make
+ * sure we don't double count. Because normalization is done the same way as
+ * when the groups are different, we add 2 * the boxvol each time. We add the
+ * box volume instead of just counting because the box volume may not be
+ * constant. If the box could be assured to be constant we would just put the
+ * box volume in the normalization function, but instead we put it here. We also
+ * exclude atoms closer than rexcl; this is so we don't count atoms on the same
+ * molecule.
+ */
+void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binwidth, vector <double> &g) 
+{
 
     const int nFrames = traj.GetNFrames();
     const int nGrp = traj.GetNAtoms(grp);
@@ -126,17 +133,20 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
     coordinates atomj;
 
     #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj)
-    for (frame = 0; frame < nFrames; frame++) {
+    for (frame = 0; frame < nFrames; frame++) 
+    {
 
         if (frame % 10 == 0) cout << "Frame: " << frame << endl;
         box = traj.GetBox(frame);
         boxvolX2 = 2.0 * volume(box);
 
-        for (i = 0; i < nGrp-1; i++) {
+        for (i = 0; i < nGrp-1; i++) 
+        {
 
             atomi = traj.GetXYZ(frame,grp,i);
 
-            for (j = i+1; j < nGrp; j++) {
+            for (j = i+1; j < nGrp; j++) 
+            {
 
                 atomj = traj.GetXYZ(frame,grp,j);
                 doBinning(atomi,atomj,box,boxvolX2,binwidth,rexcl2,end2,g);
@@ -151,9 +161,12 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
 
 }
 
-// Calculates the radial distribution function for two groups that are
-// different. For more details see the function above.
-void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g) {
+/* 
+ * Calculates the radial distribution function for two groups that are
+ * different. For more details see the function above.
+ */
+void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end2, double binwidth, vector <double> &g) 
+{
 
     const int nFrames = traj.GetNFrames();
     const int nGrp1 = traj.GetNAtoms(grp1);
@@ -192,10 +205,13 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 }
 
 
-// Does the actual binning - gets the squared distance, finds out if it is
-// within the noexcluded range and then adds the box volume to the bin
-// specified.
-void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g) {
+/* 
+ * Does the actual binning - gets the squared distance, finds out if it is
+ * within the noexcluded range and then adds the box volume to the bin
+ * specified.
+ */
+void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g) 
+{
 
     double r2;
     int ig;
@@ -210,11 +226,14 @@ void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double bo
 
 }
 
-// Normalizes the radial distribution function. Each bin has an associated
-// volume, which we divide by. The volume is spherical (but not a sphere, since
-// it is missing the inner part). The normalization factor also includes the
-// number of atoms in each group as well as the number of frames.
-void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g) {
+/* 
+ * Normalizes the radial distribution function. Each bin has an associated
+ * volume, which we divide by. The volume is spherical (but not a sphere, since
+ * it is missing the inner part). The normalization factor also includes the
+ * number of atoms in each group as well as the number of frames.
+ */
+void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vector <double> &g) 
+{
 
     const int nFrames = traj.GetNFrames();
     const int nGrp1 = traj.GetNAtoms(grp1);
@@ -225,9 +244,10 @@ void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vect
     unsigned int i;
 
     normFactor = (nGrp1-1) * nGrp2 * nFrames;
-    for (i = 0; i < g.size(); i++) {
+    for (i = 0; i < g.size(); i++) 
+    {
         r = (double) i;
-        binvol = pow(r,3) - pow((r-1.0),3);
+        binvol = pow(r+1.0,3) - pow(r,3);
         binvol *= f * pow(binwidth,3);
         g.at(i) /= (binvol * normFactor);
     }

@@ -243,12 +243,11 @@ void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vect
     double r;
     unsigned int i;
 
-    normFactor = (nGrp1-1) * nGrp2 * nFrames;
+    normFactor = (nGrp1-1) * nGrp2 * nFrames * f * pow(binwidth,3);
     for (i = 0; i < g.size(); i++) 
     {
         r = (double) i;
         binvol = pow(r+1.0,3) - pow(r,3);
-        binvol *= f * pow(binwidth,3);
         g.at(i) /= (binvol * normFactor);
     }
 

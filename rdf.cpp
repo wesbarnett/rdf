@@ -72,16 +72,18 @@ int main(int argc, char *argv[])
     rexcl2 = rexcl*rexcl;
     end2 = end * end;
 
-    const int nBins = (end-start)/binwidth + 1;
-    vector <double> g(nBins,0.0);
+    const int nBins = (end - start)/binwidth + 1;
+    vector <double> g(nBins, 0.0);
 
     Trajectory traj(xtcfile, ndxfile);
 
     if (grp1 == grp2) 
     {
-        doRdf(traj,grp1,rexcl2,end2,binwidth,g);
-    } else {
-        doRdf(traj,grp1,grp2,rexcl2,end2,binwidth,g);
+        doRdf(traj, grp1, rexcl2, end2, binwidth, g);
+    } 
+    else 
+    {
+        doRdf(traj, grp1, grp2, rexcl2, end2, binwidth, g);
     }
     normalize(traj, grp1, grp2, binwidth, g);
 
@@ -98,7 +100,7 @@ int main(int argc, char *argv[])
     oFS << fixed << setprecision(6);
     for (int i = 0; i < nBins; i++) 
     {
-        oFS << ((double) i) * binwidth + start << "  " << g[i] << endl;
+        oFS << ((double) i) * binwidth + start << "  " << g.at(i) << endl;
     }
     oFS.close();
     cout << "done." << endl;
@@ -123,34 +125,42 @@ void doRdf(Trajectory &traj, string grp, double rexcl2, double end2, double binw
 
     const int nFrames = traj.GetNFrames();
     const int nGrp = traj.GetNAtoms(grp);
-    double boxvol;
-    double boxvolX2;
-    int frame;
-    int i;
-    int j;
-    triclinicbox box;
-    coordinates atomi;
-    coordinates atomj;
 
-    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj)
-    for (frame = 0; frame < nFrames; frame++) 
+    #pragma omp parallel
     {
 
-        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        box = traj.GetBox(frame);
-        boxvolX2 = 2.0 * volume(box);
+        vector <double> g_thread(g.size(), 0.0);
 
-        for (i = 0; i < nGrp-1; i++) 
+        #pragma omp for schedule(guided)
+        for (int frame = 0; frame < nFrames; frame++) 
         {
 
-            atomi = traj.GetXYZ(frame,grp,i);
+            if (frame % 10 == 0) cout << "Frame: " << frame << endl;
+            triclinicbox box = traj.GetBox(frame);
+            double boxvolX2 = 2.0 * volume(box);
 
-            for (j = i+1; j < nGrp; j++) 
+            for (int i = 0; i < nGrp-1; i++) 
             {
 
-                atomj = traj.GetXYZ(frame,grp,j);
-                doBinning(atomi,atomj,box,boxvolX2,binwidth,rexcl2,end2,g);
+                coordinates atomi = traj.GetXYZ(frame, grp, i);
 
+                for (int j = i+1; j < nGrp; j++) 
+                {
+
+                    coordinates atomj = traj.GetXYZ(frame, grp, j);
+                    doBinning(atomi, atomj, box, boxvolX2, binwidth, rexcl2, end2, g_thread);
+
+                }
+
+            }
+
+        }
+
+        #pragma omp critical
+        {
+            for (int i = 0; i < g.size(); i++)
+            {
+                g.at(i) += g_thread.at(i);
             }
 
         }
@@ -171,35 +181,50 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
     const int nFrames = traj.GetNFrames();
     const int nGrp1 = traj.GetNAtoms(grp1);
     const int nGrp2 = traj.GetNAtoms(grp2);
-    double boxvol;
-    double r2;
-    int frame;
-    int i;
-    int j;
-    triclinicbox box;
-    coordinates atomi;
-    coordinates atomj;
 
-    #pragma omp parallel for schedule(guided) private(frame,i,j,atomi,atomj)
-    for (frame = 0; frame < nFrames; frame++) {
+    #pragma omp parallel
+    {
+        vector <double> g_thread(g.size(), 0.0);
 
-        if (frame % 10 == 0) cout << "Frame: " << frame << endl;
-        box = traj.GetBox(frame);
-        boxvol = volume(box);
+        #pragma omp for schedule(guided)
+        for (int frame = 0; frame < nFrames; frame++) 
+        {
 
-        for (i = 0; i < nGrp1; i++) {
+            if (frame % 10 == 0)
+            {
+                cout << "Frame: " << frame << endl;
+            }
 
-            atomi = traj.GetXYZ(frame,grp1,i);
+            triclinicbox box = traj.GetBox(frame);
+            double boxvol = volume(box);
 
-            for (j = 0; j < nGrp2; j++) {
+            for (int i = 0; i < nGrp1; i++) 
+            {
 
-                atomj = traj.GetXYZ(frame,grp2,j);
-                doBinning(atomi,atomj,box,boxvol,binwidth,rexcl2,end2,g);
+                coordinates atomi = traj.GetXYZ(frame, grp1, i);
+
+                for (int j = 0; j < nGrp2; j++) 
+                {
+
+                    coordinates atomj = traj.GetXYZ(frame, grp2, j);
+                    doBinning(atomi, atomj, box, boxvol, binwidth, rexcl2, end2, g_thread);
+                }
+
+            }
+
+        }
+
+        #pragma omp critical
+        {
+            for (int i = 0; i < g.size(); i++)
+            {
+                g.at(i) += g_thread.at(i);
             }
 
         }
 
     }
+    
 
     return;
 }
@@ -213,12 +238,10 @@ void doRdf(Trajectory &traj, string grp1, string grp2, double rexcl2, double end
 void doBinning(coordinates atomi, coordinates atomj, triclinicbox box, double boxvol, double binwidth, double rexcl2, double end2, vector <double> &g) 
 {
 
-    double r2;
-    int ig;
-
-    r2 = distance2(atomi,atomj,box);
-    if (r2 > rexcl2 && r2 < end2) {
-        ig = floor(sqrt(r2)/binwidth);
+    double r2 = distance2(atomi,atomj,box);
+    if (r2 > rexcl2 && r2 < end2) 
+    {
+        int ig = floor(sqrt(r2)/binwidth);
         g.at(ig) += boxvol;
     }
 
@@ -238,16 +261,12 @@ void normalize(Trajectory &traj, string grp1, string grp2, double binwidth, vect
     const int nFrames = traj.GetNFrames();
     const int nGrp1 = traj.GetNAtoms(grp1);
     const int nGrp2 = traj.GetNAtoms(grp2);
-    double binvol;
-    double normFactor;
-    double r;
-    unsigned int i;
 
-    normFactor = (nGrp1-1) * nGrp2 * nFrames * f * pow(binwidth,3);
-    for (i = 0; i < g.size(); i++) 
+    double normFactor = (nGrp1-1) * nGrp2 * nFrames * f * pow(binwidth,3);
+    for (unsigned int i = 0; i < g.size(); i++) 
     {
-        r = (double) i;
-        binvol = pow(r+1.0,3) - pow(r,3);
+        double r = (double) i;
+        double binvol = pow(r+1.0,3) - pow(r,3);
         g.at(i) /= (binvol * normFactor);
     }
 

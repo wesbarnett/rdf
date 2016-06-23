@@ -27,6 +27,6 @@
 *.out
 *.app
 
-rdf
+run
 *.ndx
 *.xtc

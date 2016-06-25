@@ -90,6 +90,7 @@ int main(int argc, char *argv[])
     vector <double> g(nBins, 0.0);
 
     Trajectory traj(xtcfile, ndxfile);
+    traj.read();
 
     if (grp1 == grp2) 
     {
